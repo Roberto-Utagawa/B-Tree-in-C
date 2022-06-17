@@ -1,0 +1,18 @@
+insert 15,"Gabriel","Piruleta","Sistemas de Informacao",8.40
+insert 16,"Joy","Mark","Sistemas de Informacao",6.40
+insert 40,"Carl","Donna","Sistemas de Informacao",9.00
+insert 17,"Clara","Randal","Sistemas de Informacao",5.40
+insert 8,"Eloise","William","Sistemas de Informacao",7.10
+insert 13,"Steven","Ernest","Sistemas de Informacao",5.10
+insert 42,"Jimmy","Kenneth","Sistemas de Informacao",5.60
+insert 43,"Beverly","Richard","Sistemas de Informacao",4.50
+insert 44,"Darryl","William","Sistemas de Informacao",3.40
+insert 39,"Brandon","Gary","Sistemas de Informacao",8.90
+insert 38,"Robert","Leonard","Sistemas de Informacao",4.20
+search 13
+search 43
+search 42
+search 39
+search 38
+search 44
+exit

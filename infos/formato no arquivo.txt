@@ -1,0 +1,25 @@
+| 1 2 3 4 5 6 7... 204 | 0 1 2 3 4 5 7 8 9 | A B C D E F G H I J | 10  | false |
+|        CHAVES        |  RRNS DAS CHAVES  |    RRN DOS FILHOS   | QNT |  LEAF |
+|      	  int          |        long       |        long         |short| bool  |
+
+| -1 -1 -1 -1 - 1 -1 -1| -1 -1 -1 -1 -1 -1 | -1 -1 -1 -1 -1-1 -1 | -1  | true  |
+|        CHAVES        |  RRNS DAS CHAVES  |    RRN DOS FILHOS   | QNT |  LEAF |
+|      	  int          |        long       |        long         |short| bool  |
+
+4max + 8max + 8(max+1) + 2 + 1
+20max + 8 + 3
+20max + 11 = 4096
+max = 4085/20
+max = 204
+
+*max = quantidade maxima de chaves em um node
+
+
+| 1 3 3 4 5 6 7  9  8 |
+|0 1 2 3 4 5 6 <9 >9 > 8|
+
+|   9    2   |
+|4    10   -1|
+
+|   2    9   |
+|-1    4   10|
