@@ -17,15 +17,20 @@
 
 #define BTREE "data/btree.data"
 
-#define DEBUG printf("DEBUG Aaaa!!!\n");
-#define DEBUGB printf("DEBUG Bbbb!!!\n");
-
 typedef struct key_st KEY;
 typedef struct node_st NODE;
 
+/* Busca o registro pelo nUsp na árvore */
 KEY* btree_search(int nUsp);
+
+
+/* Se possivel, insere o registro na árvore */
 bool btree_insertion(REGISTRY *reg);
+
+
 bool btree_update(REGISTRY *reg);
+void node_print(NODE *node);
+void key_print(KEY *key);
 
 void key_memory_clear(KEY **key);
 

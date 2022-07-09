@@ -1,22 +1,28 @@
 #include "b-tree.h"
 #include "b-tree-aux.h"
 
-static void node_sort(NODE *node, long child_left);
-void node_print(NODE *node);
-void key_print(KEY *key);
+static void btree_print_r(NODE *node, FILE *btree);
 
-/* Recursivos */
+/* Ordena um nó pelo nUsp, utilizando o Insertion Sort */
+static void node_sort(NODE *node, long child_left);
 
 static KEY* btree_search_r(int nUsp, NODE *node, FILE *btree);
-static void btree_insert_r(FILE* btree, NODE *node, int nUsp, long RRN, NODE *father_node, long father_node_RRN);
+
 static void btree_update_r(FILE* btree, NODE *node, int nUsp, long RRN);
 
-/* Funções para o SPLIT */
-
-static int node_median_index(NODE *node);
+/* Insere 1 elemento em um nó */
 static void node_insert_1_element(NODE *node, int nUsp, long RRN, long child_1, long child_2);
 
-static void btree_print_r(NODE *node, FILE *btree);
+static void btree_insert_r(FILE* btree, NODE *node, int nUsp, long RRN, NODE *father_node, 
+                           long father_node_RRN);
+
+/* Realiza a função split no root */
+static void split_root(FILE *btree, NODE *split_node, NODE *father_node, long split_node_RRN, 
+                  long father_node_RRN, long new_node_RRN, int median_index, NODE *new_node);
+
+/* Realiza a função split no node atual */
+static void split_actual_node(FILE *btree, NODE *split_node, NODE *father_node, long split_node_RRN, 
+                         long father_node_RRN, long new_node_RRN, int median_index, NODE *new_node);
 
 struct key_st
 {
@@ -33,163 +39,137 @@ struct node_st
 };
 
 
-static void split(FILE *btree, NODE *split_node, bool inInsetion, NODE *father_node, long split_node_RRN, long father_node_RRN)
+static void split_root(FILE *btree, NODE *split_node, NODE *father_node, long split_node_RRN, 
+                   long father_node_RRN, long new_node_RRN, int median_index, NODE *new_node)
+{
+    long new_root_RRN;
+
+    /* Cria novo Node Root */
+    NODE* new_root = node_create_null();
+
+    /* Definir novo node root como não folha */
+    new_root->isLeaf = false;
+
+    /* Inserir elementos a direita do nó dividido no novo nó e apaga do nó antigo */
+    short median_nUsp = split_node->keys[median_index].nUsp;
+    long median_RRN = split_node->keys[median_index].RRN;
+
+    split_node->keys[median_index].nUsp = NOTHING;
+    split_node->keys[median_index].RRN = NOTHING;
+    for(int i = median_index + 1; i < split_node->keysNumber; i++)
+    {
+        node_insert_1_element(new_node, split_node->keys[i].nUsp, split_node->keys[i].RRN, 
+                                        split_node->childs[i], split_node->childs[i + 1]);
+
+        split_node->keys[i].nUsp = NOTHING;
+        split_node->keys[i].RRN = NOTHING;
+        
+        split_node->childs[i] = NOTHING;
+        split_node->childs[i+1] = NOTHING;
+    }
+    split_node->keysNumber = split_node->keysNumber - median_index;
+
+
+    /* Escreve no arquivo o nó criado e retorna o RRN dele */
+    fseek(btree, 0, SEEK_END);
+    new_node_RRN = node_write_file(new_node, btree);        
+
+    /* Atualiza o nó dividido */
+    fseek(btree, split_node_RRN, SEEK_SET);
+    split_node_RRN = node_write_file(split_node, btree);
+
+    /* Inserir o valor central no novo root e aponta para os novos nós criados */
+    node_insert_1_element(new_root, median_nUsp, median_RRN, split_node_RRN, new_node_RRN);
+
+    /* Escreve o novo root no arquivo */
+    fseek(btree, 0, SEEK_END);
+    new_root_RRN = node_write_file(new_root, btree);
+
+    /* Atualizar Header para o RRN do novo node ROOT */
+    fseek(btree, 0, SEEK_SET);
+    fwrite(&new_root_RRN, sizeof(long), 1, btree);
+    fseek(btree, 0, SEEK_SET);
+    fread(&new_root_RRN, sizeof(long), 1, btree);
+    
+    node_memory_clear(&new_node);
+}
+
+
+static void split_actual_node(FILE *btree, NODE *split_node, NODE *father_node, long split_node_RRN, 
+                          long father_node_RRN, long new_node_RRN, int median_index, NODE *new_node)
+{
+    /* Valor central do nó a ser dividido, passar para o nó-pai */
+    father_node->keys[father_node->keysNumber].nUsp = split_node->keys[median_index].nUsp;
+    father_node->keys[father_node->keysNumber].RRN = split_node->keys[median_index].RRN;
+    father_node->childs[father_node->keysNumber + 1] = NOTHING;
+    father_node->keysNumber++;
+
+    /* Inserir elementos a direita do nó dividido no novo nó e apaga do nó antigo */
+    split_node->keys[median_index].nUsp = NOTHING;
+    split_node->keys[median_index].RRN = NOTHING;
+    for(int i = median_index + 1; i < split_node->keysNumber; i++)
+    {
+        node_insert_1_element(new_node, split_node->keys[i].nUsp, split_node->keys[i].RRN, 
+                                        split_node->childs[i], split_node->childs[i + 1]);
+
+        split_node->keys[i].nUsp = NOTHING;
+        split_node->keys[i].RRN = NOTHING;
+
+        split_node->childs[i] = NOTHING;
+        split_node->childs[i+1] = NOTHING;
+    }
+    split_node->keysNumber = split_node->keysNumber - median_index;
+
+    /* Escreve o novo nó no arquivo */
+    fseek(btree, 0, SEEK_END);
+    new_node_RRN = node_write_file(new_node, btree);
+
+    /* Atualiza o nó que sofreu o split no arquivo */
+    fseek(btree, split_node_RRN, SEEK_SET);
+    node_write_file(split_node, btree);
+
+    /* Registro novo do pai aponta para os novos nó criado */
+    father_node->childs[father_node->keysNumber] = new_node_RRN;
+
+    node_sort(father_node, split_node_RRN);
+
+    /* Atualiza o nó pai */
+    fseek(btree, father_node_RRN, SEEK_SET);
+    node_write_file(father_node, btree);
+}
+
+
+static void split(FILE *btree, NODE *split_node, bool inInsetion, NODE *father_node, 
+                                          long split_node_RRN, long father_node_RRN)
 {    
-    long new_node_RRN;
+    long new_node_RRN = NOTHING;
 
     int median_index = node_median_index(split_node);
 
-    /* Verifica se é um nó raiz */
-    if(father_node == NULL)
+    NODE* new_node = node_create_null();// Criar o novo nó
+
+    if(inInsetion)// Verificar se o split estiver acontecendo na inserção
     {
-        long new_root_RRN;
-
-        /* Cria novo Node Root */
-        NODE* new_root = node_create_null();
-
-        /* Definir novo node root como não folha */
-        new_root->isLeaf = false;
-
-        /* Criar o novo nó */
-        NODE* new_node = node_create_null();
-
-        /* Verificar se o split estiver acontecendo na inserção */
-        if(inInsetion)
-        {
-            /* Definir o novo nó como folha */
-            new_node->isLeaf = true;
-        }
-        else
-        {
-            /* Definir o novo nó como não sendo folha */
-            new_node->isLeaf = false;
-        }
-
-        /* Inserir elementos a direita do nó dividido no novo nó e apaga do nó antigo */
-        short median_nUsp = split_node->keys[median_index].nUsp;
-        long median_RRN = split_node->keys[median_index].RRN;
-
-        split_node->keys[median_index].nUsp = NOTHING;
-        split_node->keys[median_index].RRN = NOTHING;
-        for(int i = median_index + 1; i < split_node->keysNumber; i++)
-        {
-            node_insert_1_element(new_node, split_node->keys[i].nUsp, split_node->keys[i].RRN, 
-                                            split_node->childs[i], split_node->childs[i + 1]);
-    
-            split_node->keys[i].nUsp = NOTHING;
-            split_node->keys[i].RRN = NOTHING;
-            
-            split_node->childs[i] = NOTHING;
-            split_node->childs[i+1] = NOTHING;
-        }
-        split_node->keysNumber = split_node->keysNumber - median_index;
-
-
-        /* Escreve no arquivo o nó criado e retorna o RRN dele */
-        fseek(btree, 0, SEEK_END);
-        new_node_RRN = node_write_file(new_node, btree);        
-
-        /* Atualiza o nó dividido */
-        fseek(btree, split_node_RRN, SEEK_SET);
-        split_node_RRN = node_write_file(split_node, btree);
-
-        /* Inserir o valor central no novo root e aponta para os novos nós criados */
-        node_insert_1_element(new_root, median_nUsp, median_RRN, split_node_RRN, new_node_RRN);
-
-        /* Escreve o novo root no arquivo */
-        fseek(btree, 0, SEEK_END);
-        new_root_RRN = node_write_file(new_root, btree);
-
-        //node_print(new_node);
-        //node_print(new_root);
-        //node_print(split_node);
-
-        /* Atualizar Header para o RRN do novo node ROOT */
-        fseek(btree, 0, SEEK_SET);
-        fwrite(&new_root_RRN, sizeof(long), 1, btree);
-        fseek(btree, 0, SEEK_SET);
-        fread(&new_root_RRN, sizeof(long), 1, btree);
-        
-        //btree_print(btree);  
-
-        node_memory_clear(&new_node);
+        new_node->isLeaf = true; // Definir o novo nó como folha 
     }
     else
     {
-        /* Valor central do nó a ser dividido, passar para o nó-pai */
-        father_node->keys[father_node->keysNumber].nUsp = split_node->keys[median_index].nUsp;
-        father_node->keys[father_node->keysNumber].RRN = split_node->keys[median_index].RRN;
-        father_node->childs[father_node->keysNumber + 1] = NOTHING;
-        father_node->keysNumber++;
-        
-        /* Criar novo nó */
-        NODE* new_node = node_create_null();
-
-        if(inInsetion)
-        {
-            /* Define novo nó como folha */
-            new_node->isLeaf = true;
-        }
-        else
-        {
-            /* Define novo nó como não folha */
-            new_node->isLeaf = false;
-        }
-
-        /* Inserir elementos a direita do nó dividido no novo nó e apaga do nó antigo */
-        split_node->keys[median_index].nUsp = NOTHING;
-        split_node->keys[median_index].RRN = NOTHING;
-        for(int i = median_index + 1; i < split_node->keysNumber; i++)
-        {
-            node_insert_1_element(new_node, split_node->keys[i].nUsp, split_node->keys[i].RRN, 
-                                            split_node->childs[i], split_node->childs[i + 1]);
+        new_node->isLeaf = false; // Definir o novo nó como não sendo folha 
+    }
     
-            split_node->keys[i].nUsp = NOTHING;
-            split_node->keys[i].RRN = NOTHING;
-
-            split_node->childs[i] = NOTHING;
-            split_node->childs[i+1] = NOTHING;
-        }
-        split_node->keysNumber = split_node->keysNumber - median_index;
-
-        // RRN SE REPETINDO
-
-
-        /* Escreve o novo nó no arquivo */
-        fseek(btree, 0, SEEK_END);
-        new_node_RRN = node_write_file(new_node, btree);
-
-        /* Atualiza o nó que sofreu o split no arquivo */
-        fseek(btree, split_node_RRN, SEEK_SET);
-        node_write_file(split_node, btree);
-
-        /* Registro novo do pai aponta para os novos nó criado */
-        father_node->childs[father_node->keysNumber] = new_node_RRN;
-        //node_print(father_node);
-        node_sort(father_node, split_node_RRN);
-        //node_print(father_node);
-
-        //node_print(new_node);
-        //node_print(split_node);
-
-        /* Atualiza o nó pai */
-        fseek(btree, father_node_RRN, SEEK_SET);
-        node_write_file(father_node, btree);
-        
-    }
-}
-
-/* Retorna o index da mediana de um nó */
-static int node_median_index(NODE *node)
-{
-    if(node == NULL)
+    if(father_node == NULL) // Verifica se é um nó raiz 
     {
-        exit(-1);
+        split_root(btree, split_node, father_node, split_node_RRN, father_node_RRN, 
+                                             new_node_RRN, median_index, new_node);
     }
-    return (node->keysNumber)/2;
+    else
+    {
+        split_actual_node(btree, split_node, father_node, split_node_RRN, father_node_RRN, 
+                                                    new_node_RRN, median_index, new_node);
+    }
 }
 
-/* Insere 1 elemento em um nó */
+
 static void node_insert_1_element(NODE *node, int nUsp, long RRN, long child_1, long child_2)
 {
     if(node != NULL)
@@ -230,6 +210,7 @@ bool btree_update(REGISTRY *reg)
         {
             exit(-1);
         }
+
         /* Aponta para o primeiro nó */
         fseek(btree, *RRN, SEEK_CUR);
 
@@ -253,6 +234,7 @@ bool btree_update(REGISTRY *reg)
         return false;
     }
 }
+
 static void btree_update_r(FILE* btree, NODE *node, int nUsp, long RRN)
 {
     /* Verifica se o registro está nesse nó */
@@ -275,15 +257,16 @@ static void btree_update_r(FILE* btree, NODE *node, int nUsp, long RRN)
                 fseek(btree, node->childs[i], SEEK_SET);
                 NODE* temp = node_read_file(btree);
                 btree_update_r(btree, temp, nUsp, RRN);
+    
                 return;
             }
             /* Caso o filho buscado seja o filho direito do ultimo registro */
             else if(i == node->keysNumber)
             {
                 fseek(btree, node->childs[i], SEEK_SET);
-                NODE* temp = node_read_file(
-            btree);
+                NODE* temp = node_read_file(btree);
                 btree_update_r(btree, temp, nUsp, RRN);
+    
                 return;
             }
             /* Caso o filho buscado está entre os dois registros buscados */
@@ -292,12 +275,13 @@ static void btree_update_r(FILE* btree, NODE *node, int nUsp, long RRN)
                 fseek(btree, node->childs[i + 1], SEEK_SET);
                 NODE* temp = node_read_file(btree);
                 btree_update_r(btree, temp, nUsp, RRN);
+    
                 return;
             }
     }
 }
 
-/* Inserção */
+
 bool btree_insertion(REGISTRY *reg)
 {
     if(!registry_exist(reg))
@@ -326,12 +310,7 @@ bool btree_insertion(REGISTRY *reg)
     
         if(node_overflow(root))
         {
-            //printf("\n\n\n\n\n\na:\n\n");
-            //btree_print(btree);
-            
-            //printf("\n\n\n\n\n\na:\n\n");
             split(btree, root, false, NULL, *RRN, NOTHING);
-            //btree_print(btree);
         }
         
         /* Fecha a árvore */
@@ -466,8 +445,7 @@ static void btree_insert_r(FILE* btree, NODE *node, int nUsp, long RRN, NODE *fa
     }
 }
 
-/* Busca o registro utilizando o nUsp,entretanto, aloca um novo registro, portanto, deve */
-/* exclui-lo */
+
 KEY* btree_search(int nUsp)
 {
     long temp;
@@ -530,7 +508,6 @@ static KEY* btree_search_r(int nUsp, NODE *node, FILE *btree)
 }
 
 
-/* Ordena um nó pelo nUsp, utilizando o Insertion Sort */
 static void node_sort(NODE *node, long child_left)
 {
     int temp_nUsp = node->keys[node->keysNumber - 1].nUsp;

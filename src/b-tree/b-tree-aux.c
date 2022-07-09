@@ -104,3 +104,13 @@ NODE* node_take_root(long *RRN)
 
     return root;
 }
+
+int node_median_index(NODE *node)
+{
+    if(node == NULL)
+    {
+        exit(-1);
+    }
+
+    return (node_keysNumber(node))/2;
+}

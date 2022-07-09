@@ -44,5 +44,7 @@ FILE* btree_create();
  */
 NODE* node_take_root(long *RRN);
 
+int node_median_index(NODE *node);
+
 
 #endif //B_BTREE_AUX_H
