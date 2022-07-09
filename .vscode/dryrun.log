@@ -1,0 +1,5 @@
+make --dry-run --keep-going --print-directory
+make: Entering directory '/home/utagawa/Documentos/BSI/3-Semestre/ALG_II/b-tree-in-c'
+gcc -Wall -g src/main.c src/registros/registry.c src/util/util.c src/b-tree/b-tree.c src/b-tree/b-tree-aux.c -o registros_de_alunos
+make: Leaving directory '/home/utagawa/Documentos/BSI/3-Semestre/ALG_II/b-tree-in-c'
+ 

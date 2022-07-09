@@ -12,6 +12,7 @@ run:
 	./$(BINARY)
 
 valgrind:
+	make clean
 	valgrind --tool=memcheck --leak-check=full  --track-origins=yes --show-leak-kinds=all --show-reachable=yes ./$(BINARY) < infos/inp.in
 
 README:

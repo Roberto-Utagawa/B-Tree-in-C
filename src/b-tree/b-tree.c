@@ -90,7 +90,8 @@ static void split_root(FILE *btree, NODE *split_node, NODE *father_node, long sp
     fwrite(&new_root_RRN, sizeof(long), 1, btree);
     fseek(btree, 0, SEEK_SET);
     fread(&new_root_RRN, sizeof(long), 1, btree);
-    
+
+    node_memory_clear(&new_root);
     node_memory_clear(&new_node);
 }
 
@@ -306,6 +307,7 @@ bool btree_insertion(REGISTRY *reg)
 
         /* Busca a folha recursivamente */
         btree_insert_r(btree, root, registry_nUps(reg), RRN_data, NULL, NOTHING);
+        node_memory_clear(&root);
         root = node_take_root(RRN);
     
         if(node_overflow(root))
@@ -315,7 +317,9 @@ bool btree_insertion(REGISTRY *reg)
         
         /* Fecha a árvore */
         fclose(btree);
+
         node_memory_clear(&root);
+        
         free(RRN); 
     
         return true;
@@ -457,6 +461,7 @@ KEY* btree_search(int nUsp)
     KEY* key = btree_search_r(nUsp, root, btree);
 
     fclose(btree);
+
     node_memory_clear(&root);
 
     return key;
@@ -475,6 +480,8 @@ static KEY* btree_search_r(int nUsp, NODE *node, FILE *btree)
 
                 key->nUsp = node->keys[i].nUsp;
                 key->RRN = node->keys[i].RRN;
+
+                //node_memory_clear(&node);
     
                 return key;
             }
@@ -487,6 +494,7 @@ static KEY* btree_search_r(int nUsp, NODE *node, FILE *btree)
                 NODE *child = node_read_file(btree);
 
                 KEY* key = btree_search_r(nUsp, child, btree);
+
                 node_memory_clear(&child);
                 return key;
             }
@@ -498,6 +506,7 @@ static KEY* btree_search_r(int nUsp, NODE *node, FILE *btree)
                 NODE *child = node_read_file(btree);
                 
                 KEY* key = btree_search_r(nUsp, child, btree);
+        
                 node_memory_clear(&child);
                 return key;
 
@@ -510,39 +519,42 @@ static KEY* btree_search_r(int nUsp, NODE *node, FILE *btree)
 
 static void node_sort(NODE *node, long child_left)
 {
-    int temp_nUsp = node->keys[node->keysNumber - 1].nUsp;
-    long temp_rrn = node->keys[node->keysNumber - 1].RRN;
-    long temp_child_right = node->childs[node->keysNumber];
-
-    int i = node->keysNumber - 2;
-    bool change = false;
-
-    while(node->keys[i].nUsp > temp_nUsp && i >= 0 && node->keysNumber > 1)
+    if(node_keysNumber(node) > 1)
     {
-        change = true;
-        node->keys[i+1].nUsp =  node->keys[i].nUsp;
-        node->keys[i+1].RRN = node->keys[i].RRN;
-        node->childs[i+2] = node->childs[i+1];
+        int temp_nUsp = node->keys[node->keysNumber - 1].nUsp;
+        long temp_rrn = node->keys[node->keysNumber - 1].RRN;
+        long temp_child_right = node->childs[node->keysNumber];
 
-        i--;
-    }
-    if(change)
-    {
-        i++;
-        node->keys[i].nUsp = temp_nUsp;
-        node->keys[i].RRN = temp_rrn;
-        if(i == MAX_KEYS_WITH_OVERFLOW - 2) // Se acontece no final
+        int i = node->keysNumber - 2;
+        bool change = false;
+
+        while(node->keys[i].nUsp > temp_nUsp && i >= 0 && node->keysNumber > 1)
         {
-            node->childs[i] = child_left;
-            node->childs[i+1] = temp_child_right;
+            change = true;
+            node->keys[i+1].nUsp =  node->keys[i].nUsp;
+            node->keys[i+1].RRN = node->keys[i].RRN;
+            node->childs[i+2] = node->childs[i+1];
+
+            i--;
         }
-        else if(i != 0)
+        if(change)
         {
-            node->childs[i] = child_left;
-        }
-        else // Se acontece no inicio
-        {
-            node->childs[i + 1] = temp_child_right;
+            i++;
+            node->keys[i].nUsp = temp_nUsp;
+            node->keys[i].RRN = temp_rrn;
+            if(i == MAX_KEYS_WITH_OVERFLOW - 2) // Se acontece no final
+            {
+                node->childs[i] = child_left;
+                node->childs[i+1] = temp_child_right;
+            }
+            else if(i != 0)
+            {
+                node->childs[i] = child_left;
+            }
+            else // Se acontece no inicio
+            {
+                node->childs[i + 1] = temp_child_right;
+            }
         }
     }
 }
